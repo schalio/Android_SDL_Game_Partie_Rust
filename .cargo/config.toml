@@ -1,0 +1,7 @@
+[target.aarch64-linux-android]
+linker = "C:/Users/lscha/AppData/Local/Android/Sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/windows-x86_64/bin/clang.exe"
+rustflags = ["-Clink-arg=--target=aarch64-linux-android26"]
+
+[target.x86_64-linux-android]
+linker = "C:/Users/lscha/AppData/Local/Android/Sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/windows-x86_64/bin/clang.exe"
+rustflags = ["-Clink-arg=--target=x86_64-linux-android26"]
