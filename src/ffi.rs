@@ -22,6 +22,8 @@ pub extern "C" fn rust_app_set_screen_size(app: *mut AppState, w: i32, h: i32) {
         app.player_y = app.player_y.clamp(0.0, app.max_player_y());
         app.target_x = app.target_x.clamp(0.0, app.max_target_x());
         app.target_y = app.target_y.clamp(0.0, app.max_target_y());
+        app.enemy_x = app.enemy_x.clamp(0.0, app.max_enemy_x());
+        app.enemy_y = app.enemy_y.clamp(0.0, app.max_enemy_y());
     }));
 }
 
@@ -45,16 +47,14 @@ pub extern "C" fn rust_app_update(app: *mut AppState, dt: f32) -> i32 {
         return 0;
     }
 
-    let mut collected = 0;
+    let mut result = 0;
 
     let _ = catch_unwind(AssertUnwindSafe(|| {
         let app = unsafe { &mut *app };
-        if app.update(dt.max(0.0)) {
-            collected = 1;
-        }
+        result = app.update(dt.max(0.0));
     }));
 
-    collected
+    result
 }
 
 #[unsafe(no_mangle)]
@@ -71,7 +71,10 @@ pub extern "C" fn rust_app_get_scene(app: *const AppState, out_scene: *mut Scene
 
         out.player = app.player_rect();
         out.target = app.target_rect();
+        out.enemy = app.enemy_rect();
+        out.wall = app.wall_rect();
         out.score = app.score;
+        out.player_is_flashing = if app.player_is_flashing() { 1 } else { 0 };
         ok = 1;
     }));
 
