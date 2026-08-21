@@ -13,6 +13,8 @@ pub struct SceneData {
     pub enemy: Rect,
     pub wall: Rect,
     pub score: i32,
+    pub lives: i32,
+    pub game_over: i32,
     pub player_is_flashing: i32,
 }
 
@@ -45,6 +47,8 @@ pub struct AppState {
     pub(crate) has_move_target: bool,
 
     pub(crate) score: i32,
+    pub(crate) lives: i32,
+    pub(crate) game_over: bool,
     pub(crate) player_hit_cooldown: f32,
     pub(crate) rng: u32,
 }
