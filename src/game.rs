@@ -31,9 +31,28 @@ impl AppState {
             has_move_target: false,
 
             score: 0,
+            lives: 3,
+            game_over: false,
             player_hit_cooldown: 0.0,
             rng: 0x1234ABCD,
         }
+    }
+
+    pub fn restart(&mut self) {
+        let screen_w = self.screen_w;
+        let screen_h = self.screen_h;
+
+        *self = Self::new();
+
+        self.screen_w = screen_w;
+        self.screen_h = screen_h;
+
+        self.player_x = self.player_x.clamp(0.0, self.max_player_x());
+        self.player_y = self.player_y.clamp(0.0, self.max_player_y());
+        self.target_x = self.target_x.clamp(0.0, self.max_target_x());
+        self.target_y = self.target_y.clamp(0.0, self.max_target_y());
+        self.enemy_x = self.enemy_x.clamp(0.0, self.max_enemy_x());
+        self.enemy_y = self.enemy_y.clamp(0.0, self.max_enemy_y());
     }
 
     pub fn max_player_x(&self) -> f32 {
@@ -167,6 +186,10 @@ impl AppState {
     }
 
     pub fn update(&mut self, dt: f32) -> i32 {
+        if self.game_over {
+            return 0;
+        }
+
         if self.player_hit_cooldown > 0.0 {
             self.player_hit_cooldown = (self.player_hit_cooldown - dt).max(0.0);
         }
@@ -232,12 +255,18 @@ impl AppState {
         }
 
         if self.player_hit_cooldown <= 0.0 && rects_overlap(&player, &enemy) {
-            self.score = (self.score - 1).max(0);
+            self.lives = (self.lives - 1).max(0);
+
+            if self.lives == 0 {
+                self.game_over = true;
+            }
+
             self.player_hit_cooldown = 0.5;
             self.apply_player_knockback();
 
             let player_after_knockback = self.player_rect();
             let wall = self.wall_rect();
+
             if rects_overlap(&player_after_knockback, &wall) {
                 self.player_x = old_player_x;
                 self.player_y = old_player_y;
