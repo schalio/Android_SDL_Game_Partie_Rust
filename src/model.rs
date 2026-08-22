@@ -10,6 +10,8 @@ pub struct Rect {
 pub struct SceneData {
     pub player: Rect,
     pub target: Rect,
+    pub golden_target: Rect,
+    pub golden_target_active: i32,
     pub enemy: Rect,
     pub wall: Rect,
     pub score: i32,
@@ -36,6 +38,12 @@ pub struct AppState {
     pub(crate) target_y: f32,
     pub(crate) target_w: i32,
     pub(crate) target_h: i32,
+
+    pub(crate) golden_target_x: f32,
+    pub(crate) golden_target_y: f32,
+    pub(crate) golden_target_w: i32,
+    pub(crate) golden_target_h: i32,
+    pub(crate) golden_target_active: bool,
 
     pub(crate) enemy_x: f32,
     pub(crate) enemy_y: f32,

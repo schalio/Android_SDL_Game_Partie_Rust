@@ -19,6 +19,12 @@ impl AppState {
             target_w: 90,
             target_h: 90,
 
+            golden_target_x: 0.0,
+            golden_target_y: 0.0,
+            golden_target_w: 70,
+            golden_target_h: 70,
+            golden_target_active: false,
+
             enemy_x: 420.0,
             enemy_y: 180.0,
             enemy_w: 80,
@@ -80,6 +86,14 @@ impl AppState {
         (self.screen_h - self.enemy_h).max(0) as f32
     }
 
+    pub fn max_golden_target_x(&self) -> f32 {
+        (self.screen_w - self.golden_target_w).max(0) as f32
+    }
+
+    pub fn max_golden_target_y(&self) -> f32 {
+        (self.screen_h - self.golden_target_h).max(0) as f32
+    }
+
     pub fn next_rand(&mut self) -> u32 {
         self.rng = self.rng.wrapping_mul(1664525).wrapping_add(1013904223);
         self.rng
@@ -101,18 +115,64 @@ impl AppState {
     }
 
     pub fn place_target_random_away_from_enemy(&mut self) {
-        for _ in 0..8 {
+        for _ in 0..16 {
             self.place_target_random();
 
             let target = self.target_rect();
             let enemy = self.enemy_rect();
+            let wall = self.wall_rect();
 
-            if !rects_overlap(&target, &enemy) {
+            if !rects_overlap(&target, &enemy)
+                && !rects_overlap(&target, &wall) {
                 return;
             }
         }
 
         self.place_target_random();
+    }
+
+    pub fn place_golden_target_random(&mut self) {
+        let max_x = self.max_golden_target_x() as i32;
+        let max_y = self.max_golden_target_y() as i32;
+
+        self.golden_target_x = self.rand_range(max_x) as f32;
+        self.golden_target_y = self.rand_range(max_y) as f32;
+    }
+
+    pub fn place_golden_target_random_safely(&mut self) {
+        for _ in 0..16 {
+            self.place_golden_target_random();
+
+            let golden_target = self.golden_target_rect();
+            let target = self.target_rect();
+            let enemy = self.enemy_rect();
+            let wall = self.wall_rect();
+
+            if !rects_overlap(&golden_target, &target)
+                && !rects_overlap(&golden_target, &enemy)
+                && !rects_overlap(&golden_target, &wall) {
+                return;
+            }
+        }
+
+        self.golden_target_active = false;
+    }
+
+    pub fn try_spawn_golden_target(&mut self) {
+        if self.level() < 2 {
+            return;
+        }
+
+        if self.golden_target_active {
+            return;
+        }
+
+        let spawn_chance_percent = 25;
+
+        if self.rand_range(99) < spawn_chance_percent {
+            self.golden_target_active = true;
+            self.place_golden_target_random_safely();
+        }
     }
 
     pub fn clamp_move_target(&mut self) {
@@ -328,10 +388,22 @@ impl AppState {
         let target = self.target_rect();
         let enemy = self.enemy_rect();
 
+        if self.golden_target_active {
+            let golden_target = self.golden_target_rect();
+
+            if rects_overlap(&player, &golden_target) {
+                self.score += 3;
+                self.golden_target_active = false;
+                self.increase_enemy_speed();
+                return 1;
+            }
+        }
+
         if rects_overlap(&player, &target) {
             self.score += 1;
             self.increase_enemy_speed();
             self.place_target_random_away_from_enemy();
+            self.try_spawn_golden_target();
             return 1;
         }
 
@@ -375,6 +447,15 @@ impl AppState {
             y: self.target_y.round() as i32,
             w: self.target_w,
             h: self.target_h,
+        }
+    }
+
+    pub fn golden_target_rect(&self) -> Rect {
+        Rect {
+            x: self.golden_target_x.round() as i32,
+            y: self.golden_target_y.round() as i32,
+            w: self.golden_target_w,
+            h: self.golden_target_h,
         }
     }
 

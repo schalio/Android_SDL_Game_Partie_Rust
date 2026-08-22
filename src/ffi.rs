@@ -81,6 +81,8 @@ pub extern "C" fn rust_app_get_scene(app: *const AppState, out_scene: *mut Scene
 
         out.player = app.player_rect();
         out.target = app.target_rect();
+        out.golden_target = app.golden_target_rect();
+        out.golden_target_active = if app.golden_target_active { 1 } else { 0 };
         out.enemy = app.enemy_rect();
         out.wall = app.wall_rect();
         out.score = app.score;
