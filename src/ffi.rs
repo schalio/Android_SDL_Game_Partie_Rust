@@ -40,6 +40,11 @@ pub extern "C" fn rust_app_on_touch(app: *mut AppState, x: f32, y: f32) {
             return;
         }
 
+        if !app.game_started {
+            app.game_started = true;
+            return;
+        }
+
         app.move_target_x = (x - (app.player_w as f32 / 2.0)).clamp(0.0, app.max_player_x());
         app.move_target_y = (y - (app.player_h as f32 / 2.0)).clamp(0.0, app.max_player_y());
         app.has_move_target = true;
@@ -82,6 +87,7 @@ pub extern "C" fn rust_app_get_scene(app: *const AppState, out_scene: *mut Scene
         out.level = app.level();
         out.lives = app.lives;
         out.game_over = if app.game_over { 1 } else { 0 };
+        out.game_started = if app.game_started { 1 } else { 0 };
         out.player_is_flashing = if app.player_is_flashing() { 1 } else { 0 };
         ok = 1;
     }));

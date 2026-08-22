@@ -16,6 +16,7 @@ pub struct SceneData {
     pub level: i32,
     pub lives: i32,
     pub game_over: i32,
+    pub game_started: i32,
     pub player_is_flashing: i32,
 }
 
@@ -50,6 +51,7 @@ pub struct AppState {
     pub(crate) score: i32,
     pub(crate) lives: i32,
     pub(crate) game_over: bool,
+    pub(crate) game_started: bool,
     pub(crate) player_hit_cooldown: f32,
     pub(crate) rng: u32,
 }
