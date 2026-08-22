@@ -33,6 +33,7 @@ impl AppState {
             score: 0,
             lives: 3,
             game_over: false,
+            game_started: false,
             player_hit_cooldown: 0.0,
             rng: 0x1234ABCD,
         }
@@ -203,7 +204,7 @@ impl AppState {
     }
 
     pub fn update(&mut self, dt: f32) -> i32 {
-        if self.game_over {
+        if !self.game_started || self.game_over {
             return 0;
         }
 
