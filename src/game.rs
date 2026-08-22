@@ -141,26 +141,88 @@ impl AppState {
     pub fn level(&self) -> i32 {
         1 + self.score / 5
     }
-    
+
+    pub fn randomize_enemy_velocity_component(
+        &mut self,
+        velocity: f32,
+        min_speed: f32,
+        max_speed: f32,
+    ) -> f32 {
+        let direction = if velocity >= 0.0 { 1.0 } else { -1.0 };
+
+        let variation_percent = self.rand_range(30) as f32 - 15.0;
+        let multiplier = 1.0 + variation_percent / 100.0;
+
+        (velocity.abs() * multiplier)
+            .clamp(min_speed, max_speed)
+            * direction
+    }
+
     pub fn update_enemy(&mut self, dt: f32) {
+        let wall = self.wall_rect();
+
+        let old_enemy_x = self.enemy_x;
+
         self.enemy_x += self.enemy_vel_x * dt;
-        self.enemy_y += self.enemy_vel_y * dt;
+
+        let mut bounced_on_x = false;
 
         if self.enemy_x < 0.0 {
             self.enemy_x = 0.0;
             self.enemy_vel_x = self.enemy_vel_x.abs();
+            bounced_on_x = true;
+        } else if self.enemy_x > self.max_enemy_x() {
+            self.enemy_x = self.max_enemy_x();
+            self.enemy_vel_x = -self.enemy_vel_x.abs();
+            bounced_on_x = true;
         }
+
+        let enemy_after_x = self.enemy_rect();
+
+        if rects_overlap(&enemy_after_x, &wall) {
+            self.enemy_x = old_enemy_x;
+            self.enemy_vel_x = -self.enemy_vel_x;
+            bounced_on_x = true;
+        }
+
+        if bounced_on_x {
+            self.enemy_vel_y = self.randomize_enemy_velocity_component(
+                self.enemy_vel_y,
+                80.0,
+                425.0,
+            );
+        }
+
+        let old_enemy_y = self.enemy_y;
+
+        self.enemy_y += self.enemy_vel_y * dt;
+
+        let mut bounced_on_y = false;
+
         if self.enemy_y < 0.0 {
             self.enemy_y = 0.0;
             self.enemy_vel_y = self.enemy_vel_y.abs();
-        }
-        if self.enemy_x > self.max_enemy_x() {
-            self.enemy_x = self.max_enemy_x();
-            self.enemy_vel_x = -self.enemy_vel_x.abs();
-        }
-        if self.enemy_y > self.max_enemy_y() {
+            bounced_on_y = true;
+        } else if self.enemy_y > self.max_enemy_y() {
             self.enemy_y = self.max_enemy_y();
             self.enemy_vel_y = -self.enemy_vel_y.abs();
+            bounced_on_y = true;
+        }
+
+        let enemy_after_y = self.enemy_rect();
+
+        if rects_overlap(&enemy_after_y, &wall) {
+            self.enemy_y = old_enemy_y;
+            self.enemy_vel_y = -self.enemy_vel_y;
+            bounced_on_y = true;
+        }
+
+        if bounced_on_y {
+            self.enemy_vel_x = self.randomize_enemy_velocity_component(
+                self.enemy_vel_x,
+                80.0,
+                500.0,
+            );
         }
     }
 
