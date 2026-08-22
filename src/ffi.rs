@@ -22,8 +22,10 @@ pub extern "C" fn rust_app_set_screen_size(app: *mut AppState, w: i32, h: i32) {
         app.player_y = app.player_y.clamp(0.0, app.max_player_y());
         app.target_x = app.target_x.clamp(0.0, app.max_target_x());
         app.target_y = app.target_y.clamp(0.0, app.max_target_y());
-        app.enemy_x = app.enemy_x.clamp(0.0, app.max_enemy_x());
-        app.enemy_y = app.enemy_y.clamp(0.0, app.max_enemy_y());
+        for i in 0..2 {
+            app.enemies_x[i] = app.enemies_x[i].clamp(0.0, app.max_enemy_x(i));
+            app.enemies_y[i] = app.enemies_y[i].clamp(0.0, app.max_enemy_y(i));
+        }
     }));
 }
 
@@ -83,7 +85,10 @@ pub extern "C" fn rust_app_get_scene(app: *const AppState, out_scene: *mut Scene
         out.target = app.target_rect();
         out.golden_target = app.golden_target_rect();
         out.golden_target_active = if app.golden_target_active { 1 } else { 0 };
-        out.enemy = app.enemy_rect();
+        out.enemy_count = app.enemy_count;
+        out.enemy1 = app.enemy_rect(0);
+        out.enemy2 = app.enemy_rect(1);
+        out.enemy3 = app.enemy_rect(2);
         out.wall = app.wall_rect();
         out.score = app.score;
         out.level = app.level();

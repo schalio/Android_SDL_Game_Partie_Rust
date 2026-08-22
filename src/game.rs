@@ -25,12 +25,14 @@ impl AppState {
             golden_target_h: 70,
             golden_target_active: false,
 
-            enemy_x: 420.0,
-            enemy_y: 180.0,
-            enemy_w: 80,
-            enemy_h: 80,
-            enemy_vel_x: 200.0,
-            enemy_vel_y: 170.0,
+            enemies_w: [80, 80, 80],
+            enemies_h: [80, 80, 80],
+            enemies_vel_x: [200.0, 180.0, 190.0],
+            enemies_vel_y: [170.0, 160.0, 150.0],
+            enemies_x: [420.0, 500.0, 350.0],
+            enemies_y: [180.0, 500.0, 300.0],
+
+            enemy_count: 1,
 
             move_target_x: 100.0,
             move_target_y: 100.0,
@@ -48,18 +50,26 @@ impl AppState {
     pub fn restart(&mut self) {
         let screen_w = self.screen_w;
         let screen_h = self.screen_h;
+        let old_rng = self.rng;
 
         *self = Self::new();
 
         self.screen_w = screen_w;
         self.screen_h = screen_h;
+        self.rng = old_rng;
 
         self.player_x = self.player_x.clamp(0.0, self.max_player_x());
         self.player_y = self.player_y.clamp(0.0, self.max_player_y());
         self.target_x = self.target_x.clamp(0.0, self.max_target_x());
         self.target_y = self.target_y.clamp(0.0, self.max_target_y());
-        self.enemy_x = self.enemy_x.clamp(0.0, self.max_enemy_x());
-        self.enemy_y = self.enemy_y.clamp(0.0, self.max_enemy_y());
+
+        self.update_enemy_count();
+
+        for i in 0..self.enemy_count as usize {
+            self.place_enemy_random(i);
+            self.enemies_x[i] = self.enemies_x[i].clamp(0.0, self.max_enemy_x(i));
+            self.enemies_y[i] = self.enemies_y[i].clamp(0.0, self.max_enemy_y(i));
+        }
     }
 
     pub fn max_player_x(&self) -> f32 {
@@ -78,12 +88,12 @@ impl AppState {
         (self.screen_h - self.target_h).max(0) as f32
     }
 
-    pub fn max_enemy_x(&self) -> f32 {
-        (self.screen_w - self.enemy_w).max(0) as f32
+    pub fn max_enemy_x(&self, index: usize) -> f32 {
+        (self.screen_w - self.enemies_w[index]).max(0) as f32
     }
 
-    pub fn max_enemy_y(&self) -> f32 {
-        (self.screen_h - self.enemy_h).max(0) as f32
+    pub fn max_enemy_y(&self, index: usize) -> f32 {
+        (self.screen_h - self.enemies_h[index]).max(0) as f32
     }
 
     pub fn max_golden_target_x(&self) -> f32 {
@@ -119,8 +129,9 @@ impl AppState {
             self.place_target_random();
 
             let target = self.target_rect();
-            let enemy = self.enemy_rect();
             let wall = self.wall_rect();
+
+            let enemy = self.enemy_rect(0);
 
             if !rects_overlap(&target, &enemy)
                 && !rects_overlap(&target, &wall) {
@@ -145,8 +156,9 @@ impl AppState {
 
             let golden_target = self.golden_target_rect();
             let target = self.target_rect();
-            let enemy = self.enemy_rect();
             let wall = self.wall_rect();
+
+            let enemy = self.enemy_rect(0);
 
             if !rects_overlap(&golden_target, &target)
                 && !rects_overlap(&golden_target, &enemy)
@@ -191,11 +203,13 @@ impl AppState {
 
         let speed_multiplier = 1.08;
 
-        self.enemy_vel_x =
-            (self.enemy_vel_x * speed_multiplier).clamp(-max_speed_x, max_speed_x);
+        for i in 0..self.enemy_count as usize {
+            self.enemies_vel_x[i] =
+                (self.enemies_vel_x[i] * speed_multiplier).clamp(-max_speed_x, max_speed_x);
 
-        self.enemy_vel_y =
-            (self.enemy_vel_y * speed_multiplier).clamp(-max_speed_y, max_speed_y);
+            self.enemies_vel_y[i] =
+                (self.enemies_vel_y[i] * speed_multiplier).clamp(-max_speed_y, max_speed_y);
+        }
     }
 
     pub fn level(&self) -> i32 {
@@ -218,79 +232,179 @@ impl AppState {
             * direction
     }
 
-    pub fn update_enemy(&mut self, dt: f32) {
+    pub fn place_enemy_random(&mut self, index: usize) {
+        let wall = self.wall_rect();
+        let player = self.player_rect();
+
+        for _ in 0..32 {
+            let max_x = self.max_enemy_x(index) as i32;
+            let max_y = self.max_enemy_y(index) as i32;
+
+            let x = self.rand_range(max_x) as f32;
+            let y = self.rand_range(max_y) as f32;
+
+            let enemy_rect = Rect {
+                x: x.round() as i32,
+                y: y.round() as i32,
+                w: self.enemies_w[index],
+                h: self.enemies_h[index],
+            };
+
+            // Vérifie qu'on ne chevauche pas le mur, le joueur, ni l'autre ennemi
+            let mut ok = !rects_overlap(&enemy_rect, &wall)
+                && !rects_overlap(&enemy_rect, &player);
+
+            if ok {
+                // Vérifie la collision avec l'autre ennemi
+                // Vérifie la collision avec les autres ennemis
+                for j in 0..self.enemy_count as usize {
+                    if j == index {
+                        continue;
+                    }
+                    let other_enemy = self.enemy_rect(j);
+                    if rects_overlap(&enemy_rect, &other_enemy) {
+                        ok = false;
+                        break;
+                    }
+                }
+            }
+
+            if ok {
+                self.enemies_x[index] = x;
+                self.enemies_y[index] = y;
+                return;
+            }
+        }
+
+        // Fallback : on garde la position actuelle
+    }
+
+    pub fn update_enemy_count(&mut self) {
+        let level = self.level();
+
+        // Exemple de progression :
+        // niveau 1 → 1 ennemi
+        // niveau 2-3 → 2 ennemis
+        // niveau 4-5 → 3 ennemis
+        // niveau 6+ → 4 ennemis (max)
+        let new_count = match level {
+            1 => 1,
+            2 | 3 => 2,
+            _ => 3,
+        };
+
+        // On ne diminue jamais le nombre d'ennemis
+        if new_count > self.enemy_count {
+            let old_count = self.enemy_count;
+            self.enemy_count = new_count;
+
+            // Initialiser les nouveaux ennemis
+            for i in old_count as usize..self.enemy_count as usize {
+                self.place_enemy_random(i);
+                self.enemies_x[i] = self.enemies_x[i].clamp(0.0, self.max_enemy_x(i));
+                self.enemies_y[i] = self.enemies_y[i].clamp(0.0, self.max_enemy_y(i));
+            }
+        }
+    }
+
+    pub fn update_enemies(&mut self, dt: f32) {
         let wall = self.wall_rect();
 
-        let old_enemy_x = self.enemy_x;
+        for i in 0..self.enemy_count as usize {
+            // Axe X
+            let old_enemy_x = self.enemies_x[i];
 
-        self.enemy_x += self.enemy_vel_x * dt;
+            self.enemies_x[i] += self.enemies_vel_x[i] * dt;
 
-        let mut bounced_on_x = false;
+            let mut bounced_on_x = false;
 
-        if self.enemy_x < 0.0 {
-            self.enemy_x = 0.0;
-            self.enemy_vel_x = self.enemy_vel_x.abs();
-            bounced_on_x = true;
-        } else if self.enemy_x > self.max_enemy_x() {
-            self.enemy_x = self.max_enemy_x();
-            self.enemy_vel_x = -self.enemy_vel_x.abs();
-            bounced_on_x = true;
+            if self.enemies_x[i] < 0.0 {
+                self.enemies_x[i] = 0.0;
+                self.enemies_vel_x[i] = self.enemies_vel_x[i].abs();
+                bounced_on_x = true;
+            } else if self.enemies_x[i] > self.max_enemy_x(i) {
+                self.enemies_x[i] = self.max_enemy_x(i);
+                self.enemies_vel_x[i] = -self.enemies_vel_x[i].abs();
+                bounced_on_x = true;
+            }
+
+            let enemy_after_x = self.enemy_rect(i);
+
+            if rects_overlap(&enemy_after_x, &wall) {
+                self.enemies_x[i] = old_enemy_x;
+                self.enemies_vel_x[i] = -self.enemies_vel_x[i];
+                bounced_on_x = true;
+            }
+
+            if bounced_on_x {
+                self.enemies_vel_y[i] = self.randomize_enemy_velocity_component(
+                    self.enemies_vel_y[i],
+                    80.0,
+                    425.0,
+                );
+            }
+
+            // Axe Y
+            let old_enemy_y = self.enemies_y[i];
+
+            self.enemies_y[i] += self.enemies_vel_y[i] * dt;
+
+            let mut bounced_on_y = false;
+
+            if self.enemies_y[i] < 0.0 {
+                self.enemies_y[i] = 0.0;
+                self.enemies_vel_y[i] = self.enemies_vel_y[i].abs();
+                bounced_on_y = true;
+            } else if self.enemies_y[i] > self.max_enemy_y(i) {
+                self.enemies_y[i] = self.max_enemy_y(i);
+                self.enemies_vel_y[i] = -self.enemies_vel_y[i].abs();
+                bounced_on_y = true;
+            }
+
+            let enemy_after_y = self.enemy_rect(i);
+
+            if rects_overlap(&enemy_after_y, &wall) {
+                self.enemies_y[i] = old_enemy_y;
+                self.enemies_vel_y[i] = -self.enemies_vel_y[i];
+                bounced_on_y = true;
+            }
+
+            if bounced_on_y {
+                self.enemies_vel_x[i] = self.randomize_enemy_velocity_component(
+                    self.enemies_vel_x[i],
+                    80.0,
+                    500.0,
+                );
+            }
         }
 
-        let enemy_after_x = self.enemy_rect();
+        // Collision ennemi–ennemi
+        for i in 0..self.enemy_count as usize {
+            for j in (i + 1)..self.enemy_count as usize {
+                let enemy_i = self.enemy_rect(i);
+                let enemy_j = self.enemy_rect(j);
 
-        if rects_overlap(&enemy_after_x, &wall) {
-            self.enemy_x = old_enemy_x;
-            self.enemy_vel_x = -self.enemy_vel_x;
-            bounced_on_x = true;
-        }
+                if rects_overlap(&enemy_i, &enemy_j) {
+                    // Inverse les vitesses des deux ennemis
+                    let vxi = self.enemies_vel_x[i];
+                    let vyi = self.enemies_vel_y[i];
 
-        if bounced_on_x {
-            self.enemy_vel_y = self.randomize_enemy_velocity_component(
-                self.enemy_vel_y,
-                80.0,
-                425.0,
-            );
-        }
+                    self.enemies_vel_x[i] = -self.enemies_vel_x[j];
+                    self.enemies_vel_y[i] = -self.enemies_vel_y[j];
 
-        let old_enemy_y = self.enemy_y;
-
-        self.enemy_y += self.enemy_vel_y * dt;
-
-        let mut bounced_on_y = false;
-
-        if self.enemy_y < 0.0 {
-            self.enemy_y = 0.0;
-            self.enemy_vel_y = self.enemy_vel_y.abs();
-            bounced_on_y = true;
-        } else if self.enemy_y > self.max_enemy_y() {
-            self.enemy_y = self.max_enemy_y();
-            self.enemy_vel_y = -self.enemy_vel_y.abs();
-            bounced_on_y = true;
-        }
-
-        let enemy_after_y = self.enemy_rect();
-
-        if rects_overlap(&enemy_after_y, &wall) {
-            self.enemy_y = old_enemy_y;
-            self.enemy_vel_y = -self.enemy_vel_y;
-            bounced_on_y = true;
-        }
-
-        if bounced_on_y {
-            self.enemy_vel_x = self.randomize_enemy_velocity_component(
-                self.enemy_vel_x,
-                80.0,
-                500.0,
-            );
+                    self.enemies_vel_x[j] = -vxi;
+                    self.enemies_vel_y[j] = -vyi;
+                }
+            }
         }
     }
 
     pub fn apply_player_knockback(&mut self) {
         let player_center_x = self.player_x + self.player_w as f32 * 0.5;
         let player_center_y = self.player_y + self.player_h as f32 * 0.5;
-        let enemy_center_x = self.enemy_x + self.enemy_w as f32 * 0.5;
-        let enemy_center_y = self.enemy_y + self.enemy_h as f32 * 0.5;
+
+        let enemy_center_x = self.enemies_x[0] + self.enemies_w[0] as f32 * 0.5;
+        let enemy_center_y = self.enemies_y[0] + self.enemies_h[0] as f32 * 0.5;
 
         let dx = player_center_x - enemy_center_x;
         let dy = player_center_y - enemy_center_y;
@@ -375,18 +489,19 @@ impl AppState {
             self.move_target_y = self.player_y;
         }
 
-        self.update_enemy(dt);
+        self.update_enemies(dt);
 
         let target = self.target_rect();
-        let enemy = self.enemy_rect();
 
-        if rects_overlap(&enemy, &target) {
-            self.place_target_random_away_from_enemy();
+        for i in 0..self.enemy_count as usize {
+            let enemy = self.enemy_rect(i);
+            if rects_overlap(&enemy, &target) {
+                self.place_target_random_away_from_enemy();
+                break;
+            }
         }
 
         let player = self.player_rect();
-        let target = self.target_rect();
-        let enemy = self.enemy_rect();
 
         if self.golden_target_active {
             let golden_target = self.golden_target_rect();
@@ -407,26 +522,40 @@ impl AppState {
             return 1;
         }
 
-        if self.player_hit_cooldown <= 0.0 && rects_overlap(&player, &enemy) {
-            self.lives = (self.lives - 1).max(0);
+        self.update_enemy_count();
 
-            if self.lives == 0 {
-                self.game_over = true;
+        if self.player_hit_cooldown <= 0.0 {
+            let mut hit_by_enemy = false;
+
+            for i in 0..self.enemy_count as usize {
+                let enemy = self.enemy_rect(i);
+                if rects_overlap(&player, &enemy) {
+                    hit_by_enemy = true;
+                    break;
+                }
             }
 
-            self.player_hit_cooldown = 0.5;
-            self.apply_player_knockback();
+            if hit_by_enemy {
+                self.lives = (self.lives - 1).max(0);
 
-            let player_after_knockback = self.player_rect();
-            let wall = self.wall_rect();
+                if self.lives == 0 {
+                    self.game_over = true;
+                }
 
-            if rects_overlap(&player_after_knockback, &wall) {
-                self.player_x = old_player_x;
-                self.player_y = old_player_y;
-                self.clamp_player_position();
+                self.player_hit_cooldown = 0.5;
+                self.apply_player_knockback();
+
+                let player_after_knockback = self.player_rect();
+                let wall = self.wall_rect();
+
+                if rects_overlap(&player_after_knockback, &wall) {
+                    self.player_x = old_player_x;
+                    self.player_y = old_player_y;
+                    self.clamp_player_position();
+                }
+
+                return -1;
             }
-
-            return -1;
         }
 
         0
@@ -459,12 +588,12 @@ impl AppState {
         }
     }
 
-    pub fn enemy_rect(&self) -> Rect {
+    pub fn enemy_rect(&self, index: usize) -> Rect {
         Rect {
-            x: self.enemy_x.round() as i32,
-            y: self.enemy_y.round() as i32,
-            w: self.enemy_w,
-            h: self.enemy_h,
+            x: self.enemies_x[index].round() as i32,
+            y: self.enemies_y[index].round() as i32,
+            w: self.enemies_w[index],
+            h: self.enemies_h[index],
         }
     }
 
