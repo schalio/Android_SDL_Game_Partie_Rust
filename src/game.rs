@@ -124,6 +124,19 @@ impl AppState {
         self.player_y = self.player_y.clamp(0.0, self.max_player_y());
     }
 
+    pub fn increase_enemy_speed(&mut self) {
+        let max_speed_x = 500.0;
+        let max_speed_y = 425.0;
+
+        let speed_multiplier = 1.08;
+
+        self.enemy_vel_x =
+            (self.enemy_vel_x * speed_multiplier).clamp(-max_speed_x, max_speed_x);
+
+        self.enemy_vel_y =
+            (self.enemy_vel_y * speed_multiplier).clamp(-max_speed_y, max_speed_y);
+    }
+
     pub fn update_enemy(&mut self, dt: f32) {
         self.enemy_x += self.enemy_vel_x * dt;
         self.enemy_y += self.enemy_vel_y * dt;
@@ -250,6 +263,7 @@ impl AppState {
 
         if rects_overlap(&player, &target) {
             self.score += 1;
+            self.increase_enemy_speed();
             self.place_target_random_away_from_enemy();
             return 1;
         }
