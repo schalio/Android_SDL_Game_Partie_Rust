@@ -395,7 +395,7 @@ impl AppState {
                 self.score += 3;
                 self.golden_target_active = false;
                 self.increase_enemy_speed();
-                return 1;
+                return 3;
             }
         }
 
