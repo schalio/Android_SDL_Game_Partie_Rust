@@ -13,6 +13,7 @@ pub struct SceneData {
     pub enemy: Rect,
     pub wall: Rect,
     pub score: i32,
+    pub level: i32,
     pub lives: i32,
     pub game_over: i32,
     pub player_is_flashing: i32,

@@ -79,6 +79,7 @@ pub extern "C" fn rust_app_get_scene(app: *const AppState, out_scene: *mut Scene
         out.enemy = app.enemy_rect();
         out.wall = app.wall_rect();
         out.score = app.score;
+        out.level = app.level();
         out.lives = app.lives;
         out.game_over = if app.game_over { 1 } else { 0 };
         out.player_is_flashing = if app.player_is_flashing() { 1 } else { 0 };

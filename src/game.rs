@@ -137,6 +137,10 @@ impl AppState {
             (self.enemy_vel_y * speed_multiplier).clamp(-max_speed_y, max_speed_y);
     }
 
+    pub fn level(&self) -> i32 {
+        1 + self.score / 5
+    }
+    
     pub fn update_enemy(&mut self, dt: f32) {
         self.enemy_x += self.enemy_vel_x * dt;
         self.enemy_y += self.enemy_vel_y * dt;
