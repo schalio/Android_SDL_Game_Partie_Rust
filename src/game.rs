@@ -1,8 +1,21 @@
 use crate::collision::rects_overlap;
-use crate::model::{AppState, Rect};
+use crate::model::{AppState, Particle, Rect};
+
+
+pub const MAX_PARTICLES: usize =100;
 
 impl AppState {
     pub fn new() -> Self {
+        let mut particles = [Particle {
+            x: 0.0, y: 0.0, vx: 0.0, vy: 0.0,
+            life: 0.0, max_life: 0.0, size: 0.0,
+        }; MAX_PARTICLES];
+
+        // Créer 50 particules au départ
+        for i in 0..50 {
+            particles[i] = Self::create_particle(720.0, 1280.0);
+        }
+
         Self {
             screen_w: 0,
             screen_h: 0,
@@ -44,8 +57,17 @@ impl AppState {
             game_started: false,
             player_hit_cooldown: 0.0,
             rng: 0x1234ABCD,
+
+            particles,
+            particle_count: 50,
+
+            last_player_angle: 0.0,
+            player_visible: true,
+
         }
     }
+
+
 
     pub fn restart(&mut self) {
         let screen_w = self.screen_w;
@@ -440,8 +462,43 @@ impl AppState {
     }
 
     pub fn update(&mut self, dt: f32) -> i32 {
-        if !self.game_started || self.game_over {
+        if !self.game_started {
             return 0;
+        }
+
+        // Mettre à jour les particules même en game over
+        self.update_particles(dt);
+
+        if self.game_over {
+            return 0;
+        }
+
+        // Calculer la vélocité du joueur pour la rotation
+        if self.has_move_target {
+            let dx = self.move_target_x - self.player_x;
+            let dy = self.move_target_y - self.player_y;
+            let dist2 = dx * dx + dy * dy;
+
+            if dist2 > 0.01 {
+                let dist = dist2.sqrt();
+                let speed = 420.0;
+                self.player_vel_x = (dx / dist) * speed;
+                self.player_vel_y = (dy / dist) * speed;
+            } else {
+                self.player_vel_x = 0.0;
+                self.player_vel_y = 0.0;
+            }
+        } else {
+            self.player_vel_x = 0.0;
+            self.player_vel_y = 0.0;
+        }
+
+        // Mettre à jour last_player_angle
+        let speed = (self.player_vel_x * self.player_vel_x + self.player_vel_y * self.player_vel_y).sqrt();
+        if speed > 10.0 {
+            let angle_rad = self.player_vel_y.atan2(self.player_vel_x);
+            let angle_deg = angle_rad * 180.0 / std::f32::consts::PI;
+            self.last_player_angle = angle_deg + 90.0;
         }
 
         if self.player_hit_cooldown > 0.0 {
@@ -474,6 +531,17 @@ impl AppState {
                 } else {
                     self.player_x += (dx / dist) * step;
                     self.player_y += (dy / dist) * step;
+                }
+            }
+        }
+
+        // Ajouter des particules de traînée (plusieurs par frame)
+        if self.game_started && !self.game_over && self.has_move_target {
+            let speed = (self.player_vel_x * self.player_vel_x + self.player_vel_y * self.player_vel_y).sqrt();
+            if speed > 50.0 {
+                // Créer 2-3 particules par frame
+                for _ in 0..2 + (self.rand_range(1)) {
+                    self.spawn_trail_particle();
                 }
             }
         }
@@ -540,6 +608,8 @@ impl AppState {
 
                 if self.lives == 0 {
                     self.game_over = true;
+                    self.player_visible = false;
+                    self.spawn_explosion();
                 }
 
                 self.player_hit_cooldown = 0.5;
@@ -557,6 +627,8 @@ impl AppState {
                 return -1;
             }
         }
+
+        // self.update_particles(dt);
 
         0
     }
@@ -609,6 +681,108 @@ impl AppState {
             w: wall_w,
             h: wall_h,
         }
+    }
+
+    pub fn create_particle(screen_width: f32, screen_height: f32) -> Particle {
+        Particle {
+            x: rand::random::<f32>() * screen_width,
+            y: rand::random::<f32>() * screen_height,
+            vx: (rand::random::<f32>() - 0.5) * 40.0,
+            vy: (rand::random::<f32>() - 0.5) * 30.0,
+            life: 2.0 + rand::random::<f32>() * 3.0,
+            max_life: 5.0,
+            size: 1.0 + rand::random::<f32>() * 2.0,
+        }
+    }
+
+    pub fn update_particles(&mut self, dt: f32) {
+        for i in 0..self.particle_count as usize {
+            // Mettre à jour la position et la durée de vie
+            self.particles[i].x += self.particles[i].vx * dt;
+            self.particles[i].y += self.particles[i].vy * dt;
+            self.particles[i].life -= dt;
+
+            // Si la particule est morte et que c'est une étoile (index < 50), la réinitialiser
+            if self.particles[i].life <= 0.0 && i < 50 {
+                self.particles[i] = Self::create_particle(self.screen_w as f32, self.screen_h as f32);
+            }
+
+            // Wrap autour de l'écran (seulement pour les étoiles)
+            if i < 50 {
+                if self.particles[i].x < 0.0 {
+                    self.particles[i].x = self.screen_w as f32;
+                }
+                if self.particles[i].x > self.screen_w as f32 {
+                    self.particles[i].x = 0.0;
+                }
+                if self.particles[i].y < 0.0 {
+                    self.particles[i].y = self.screen_h as f32;
+                }
+                if self.particles[i].y > self.screen_h as f32 {
+                    self.particles[i].y = 0.0;
+                }
+            }
+        }
+    }
+
+    pub fn spawn_trail_particle(&mut self) {
+        // Trouver la plus vieille particule de traînée (index >= 50)
+        let mut oldest_idx = 50;
+        let mut oldest_life = self.particles[50].life;
+
+        for i in 51..MAX_PARTICLES {
+            if self.particles[i].life < oldest_life {
+                oldest_life = self.particles[i].life;
+                oldest_idx = i;
+            }
+        }
+
+        // Réutiliser cette particule
+        let center_x = self.player_x + self.player_w as f32 * 0.5;
+        let center_y = self.player_y + self.player_h as f32 * 0.5;
+
+        self.particles[oldest_idx] = Particle {
+            x: center_x,
+            y: center_y,
+            //vx: -self.player_vel_x * 0.1,
+            //vy: -self.player_vel_y * 0.1,
+            vx: 0.0,
+            vy: 0.0,
+            life: 0.15 + rand::random::<f32>() * 0.1,
+            max_life: 0.25,
+            //size: 3.0 + rand::random::<f32>() * 2.0,
+            size: 4.0 + rand::random::<f32>() * 4.0,  // taille entre 4 et 8
+        };
+
+        // Mettre à jour particle_count si nécessaire
+        if self.particle_count < MAX_PARTICLES as i32 {
+            self.particle_count = MAX_PARTICLES as i32;
+        }
+    }
+
+    pub fn spawn_explosion(&mut self) {
+        // Centre du joueur
+        let center_x = self.player_x + self.player_w as f32 * 0.5;
+        let center_y = self.player_y + self.player_h as f32 * 0.5;
+
+        // Réutiliser les particules de traînée (index 50 à 99)
+        for i in 50..MAX_PARTICLES {
+            let angle = rand::random::<f32>() * 2.0 * std::f32::consts::PI;
+            let speed = 100.0 + rand::random::<f32>() * 200.0;
+
+            self.particles[i] = Particle {
+                x: center_x,
+                y: center_y,
+                vx: angle.cos() * speed,
+                vy: angle.sin() * speed,
+                life: 0.5 + rand::random::<f32>() * 0.5,
+                max_life: 1.0,
+                size: 4.0 + rand::random::<f32>() * 4.0,
+            };
+        }
+
+        // S'assurer que particle_count est à max
+        self.particle_count = MAX_PARTICLES as i32;
     }
 
 }

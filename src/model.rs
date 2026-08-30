@@ -1,3 +1,5 @@
+use crate::game::MAX_PARTICLES;
+
 #[repr(C)]
 pub struct Rect {
     pub x: i32,
@@ -23,6 +25,10 @@ pub struct SceneData {
     pub game_over: i32,
     pub game_started: i32,
     pub player_is_flashing: i32,
+    pub particles: [Particle; MAX_PARTICLES],
+    pub particle_count: i32,
+    pub player_angle: f32,
+    pub player_visible: i32,
 }
 
 #[repr(C)]
@@ -67,4 +73,23 @@ pub struct AppState {
     pub(crate) game_started: bool,
     pub(crate) player_hit_cooldown: f32,
     pub(crate) rng: u32,
+
+    pub(crate) particles: [Particle; MAX_PARTICLES],
+    pub(crate) particle_count: i32,
+
+    pub(crate) last_player_angle: f32,
+    pub(crate) player_visible: bool,
+
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct Particle {
+    pub x: f32,
+    pub y: f32,
+    pub vx: f32,
+    pub vy: f32,
+    pub life: f32,
+    pub max_life: f32,
+    pub size: f32,
 }
