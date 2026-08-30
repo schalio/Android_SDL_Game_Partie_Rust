@@ -96,6 +96,24 @@ pub extern "C" fn rust_app_get_scene(app: *const AppState, out_scene: *mut Scene
         out.game_over = if app.game_over { 1 } else { 0 };
         out.game_started = if app.game_started { 1 } else { 0 };
         out.player_is_flashing = if app.player_is_flashing() { 1 } else { 0 };
+        out.particles = app.particles;
+        out.particle_count = app.particle_count;
+
+        // Calcul de l'angle du joueur (en degrés)
+        let speed = app.player_vel_x.hypot(app.player_vel_y);
+
+        if speed > 10.0 {
+            // Le vaisseau bouge, calculer l'angle
+            let angle_rad = app.player_vel_y.atan2(app.player_vel_x);
+            let angle_deg = angle_rad * 180.0 / std::f32::consts::PI;
+            out.player_angle = angle_deg + 90.0;
+
+        } else {
+            // Le vaisseau est à l'arrêt, garder le dernier angle
+            out.player_angle = app.last_player_angle;
+        }
+        out.player_visible = if app.player_visible { 1 } else { 0 };
+
         ok = 1;
     }));
 

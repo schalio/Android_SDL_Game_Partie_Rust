@@ -6,3 +6,5 @@ edition = "2024"
 [lib]
 name = "rustcore"
 crate-type = ["staticlib"]
+[dependencies]
+rand = "0.10.2"
