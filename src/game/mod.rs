@@ -22,19 +22,24 @@
 use crate::collision::rects_overlap;
 use crate::model::{AppState, Particle, Rect};
 
-pub mod particles;
-pub mod entities;
 pub mod enemy;
+pub mod entities;
+pub mod particles;
 pub mod player;
+pub mod state;
 pub mod target;
 pub mod utils;
-pub mod state;
 
 impl AppState {
     pub fn new() -> Self {
         let mut particles = [Particle {
-            x: 0.0, y: 0.0, vx: 0.0, vy: 0.0,
-            life: 0.0, max_life: 0.0, size: 0.0,
+            x: 0.0,
+            y: 0.0,
+            vx: 0.0,
+            vy: 0.0,
+            life: 0.0,
+            max_life: 0.0,
+            size: 0.0,
         }; particles::MAX_PARTICLES];
 
         // Créer 50 particules au départ
@@ -91,7 +96,6 @@ impl AppState {
 
             last_player_angle: 0.0,
             player_visible: true,
-
         }
     }
 
@@ -121,7 +125,6 @@ impl AppState {
     }
 
     pub fn update(&mut self, dt: f32) -> i32 {
-
         // Mettre à jour les particules même en game over
         self.update_particles(dt);
 
@@ -129,183 +132,48 @@ impl AppState {
             return 0;
         }
 
-        // Calculer la vélocité du joueur pour la rotation
-        if self.has_move_target {
-            let dx = self.move_target_x - self.player_x;
-            let dy = self.move_target_y - self.player_y;
-            let dist2 = dx * dx + dy * dy;
-
-            if dist2 > 0.01 {
-                let dist = dist2.sqrt();
-                let speed = 420.0;
-                self.player_vel_x = (dx / dist) * speed;
-                self.player_vel_y = (dy / dist) * speed;
-            } else {
-                self.player_vel_x = 0.0;
-                self.player_vel_y = 0.0;
-            }
-        } else {
-            self.player_vel_x = 0.0;
-            self.player_vel_y = 0.0;
-        }
-
-        // Mettre à jour last_player_angle
-        let speed = (self.player_vel_x * self.player_vel_x + self.player_vel_y * self.player_vel_y).sqrt();
-        if speed > 10.0 {
-            let angle_rad = self.player_vel_y.atan2(self.player_vel_x);
-            let angle_deg = angle_rad * 180.0 / std::f32::consts::PI;
-            self.last_player_angle = angle_deg + 90.0;
-        }
-
-        if self.player_hit_cooldown > 0.0 {
-            self.player_hit_cooldown = (self.player_hit_cooldown - dt).max(0.0);
-        }
+        self.update_player_angle();
+        self.update_player_hit_cooldown(dt);
 
         let old_player_x = self.player_x;
         let old_player_y = self.player_y;
 
-        if self.has_move_target {
-            self.clamp_move_target();
+        self.update_player_movement(dt);
 
-            let dx = self.move_target_x - self.player_x;
-            let dy = self.move_target_y - self.player_y;
-            let dist2 = dx * dx + dy * dy;
+        self.maybe_spawn_trail_particles(dt);
 
-            if dist2 <= 1.0 {
-                self.player_x = self.move_target_x;
-                self.player_y = self.move_target_y;
-                self.has_move_target = false;
-            } else {
-                let dist = dist2.sqrt();
-                let speed = 420.0;
-                let step = speed * dt;
+        self.resolve_player_wall_collision(old_player_x, old_player_y);
 
-                if step >= dist {
-                    self.player_x = self.move_target_x;
-                    self.player_y = self.move_target_y;
-                    self.has_move_target = false;
-                } else {
-                    self.player_x += (dx / dist) * step;
-                    self.player_y += (dy / dist) * step;
-                }
-            }
-        }
-
-        // Ajouter des particules de traînée (plusieurs par frame)
-        if self.play_state.is_playing() && self.has_move_target {
-            let speed = (self.player_vel_x * self.player_vel_x + self.player_vel_y * self.player_vel_y).sqrt();
-            if speed > 50.0 {
-                // Créer 2-3 particules par frame
-                for _ in 0..2 + (self.rand_range(1)) {
-                    self.spawn_trail_particle();
-                }
-            }
-        }
-
-        let wall = self.wall_rect();
-        let player_after_move = self.player_rect();
-
-        if rects_overlap(&player_after_move, &wall) {
-            self.player_x = old_player_x;
-            self.player_y = old_player_y;
-            self.has_move_target = false;
-            self.move_target_x = self.player_x;
-            self.move_target_y = self.player_y;
-        }
-
-        self.update_enemies(dt);
-
-        let target = self.target_rect();
-
-        for i in 0..self.enemy_count as usize {
-            let enemy = self.enemy_rect(i);
-            if rects_overlap(&enemy, &target) {
-                self.place_target_random_away_from_enemy();
-                break;
-            }
-        }
-
-        let player = self.player_rect();
-
-        if self.golden_target_active {
-            let golden_target = self.golden_target_rect();
-
-            if rects_overlap(&player, &golden_target) {
-                self.score += 3;
-                self.golden_target_active = false;
-                self.increase_enemy_speed();
-                return 3;
-            }
-        }
-
-        if rects_overlap(&player, &target) {
-            self.score += 1;
-            self.increase_enemy_speed();
-            self.place_target_random_away_from_enemy();
-            self.try_spawn_golden_target();
-            return 1;
+        if let Some(score) = self.update_enemies_and_check_target_collisions(dt) {
+            return score;
         }
 
         self.update_enemy_count();
 
-        if self.player_hit_cooldown <= 0.0 {
-            let mut hit_by_enemy = false;
-
-            for i in 0..self.enemy_count as usize {
-                let enemy = self.enemy_rect(i);
-                if rects_overlap(&player, &enemy) {
-                    hit_by_enemy = true;
-                    break;
-                }
-            }
-
-            if hit_by_enemy {
-                self.lives = (self.lives - 1).max(0);
-
-                if self.lives == 0 {
-                    self.play_state.game_over();
-                    self.player_visible = false;
-                    self.spawn_explosion();
-                }
-
-                self.player_hit_cooldown = 0.5;
-                self.apply_player_knockback();
-
-                let player_after_knockback = self.player_rect();
-                let wall = self.wall_rect();
-
-                if rects_overlap(&player_after_knockback, &wall) {
-                    self.player_x = old_player_x;
-                    self.player_y = old_player_y;
-                    self.clamp_player_position();
-                }
-
-                return -1;
-            }
+        if let Some(result) = self.check_player_enemy_collision(old_player_x, old_player_y) {
+            return result;
         }
-
-        // self.update_particles(dt);
 
         0
     }
 
-//  utils.rs
+    //  utils.rs
 
     pub fn next_rand(&mut self) -> u32 {
-    utils::next_rand(self)
-}
+        utils::next_rand(self)
+    }
 
     pub fn rand_range(&mut self, max_inclusive: i32) -> i32 {
         utils::rand_range(self, max_inclusive)
     }
 
-//  state.rs
+    //  state.rs
 
     pub fn level(&self) -> i32 {
         state::level(self)
     }
 
-//  entities.rs
+    //  entities.rs
 
     pub fn player_rect(&self) -> Rect {
         entities::player_rect(self)
@@ -327,7 +195,7 @@ impl AppState {
         entities::wall_rect(self)
     }
 
-//  particles.rs
+    //  particles.rs
 
     pub fn update_particles(&mut self, dt: f32) {
         particles::update_particles(
@@ -361,7 +229,7 @@ impl AppState {
         );
     }
 
-//  enemy.rs
+    //  enemy.rs
 
     pub fn max_enemy_x(&self, index: usize) -> f32 {
         (self.screen_w - self.enemies_w[index]).max(0) as f32
@@ -396,7 +264,7 @@ impl AppState {
         enemy::randomize_enemy_velocity_component(self, velocity, min_speed, max_speed)
     }
 
-//  player.rs
+    //  player.rs
 
     pub fn max_player_x(&self) -> f32 {
         player::max_player_x(self)
@@ -422,11 +290,35 @@ impl AppState {
         player::player_is_flashing(self)
     }
 
-//  target.rs
+    pub fn update_player_movement(&mut self, dt: f32) {
+        player::update_player_movement(self, dt)
+    }
 
-pub fn max_target_x(&self) -> f32 {
-    target::max_target_x(self)
-}
+    pub fn update_player_angle(&mut self) {
+        player::update_player_angle(self)
+    }
+
+    pub fn update_player_hit_cooldown(&mut self, dt: f32) {
+        player::update_player_hit_cooldown(self, dt)
+    }
+
+    pub fn maybe_spawn_trail_particles(&mut self, dt: f32) {
+        player::maybe_spawn_trail_particles(self, dt)
+    }
+
+    pub fn resolve_player_wall_collision(&mut self, old_x: f32, old_y: f32) {
+        player::resolve_player_wall_collision(self, old_x, old_y)
+    }
+
+    pub fn resolve_player_knockback_collision(&mut self, old_x: f32, old_y: f32) {
+        player::resolve_player_knockback_collision(self, old_x, old_y)
+    }
+
+    //  target.rs
+
+    pub fn max_target_x(&self) -> f32 {
+        target::max_target_x(self)
+    }
 
     pub fn max_target_y(&self) -> f32 {
         target::max_target_y(self)
@@ -458,6 +350,78 @@ pub fn max_target_x(&self) -> f32 {
 
     pub fn try_spawn_golden_target(&mut self) {
         target::try_spawn_golden_target(self)
+    }
+
+//  mod.rs
+
+    pub fn update_enemies_and_check_target_collisions(&mut self, dt: f32) -> Option<i32> {
+        self.update_enemies(dt);
+
+        let target = self.target_rect();
+
+        for i in 0..self.enemy_count as usize {
+            let enemy = self.enemy_rect(i);
+            if rects_overlap(&enemy, &target) {
+                self.place_target_random_away_from_enemy();
+                break;
+            }
+        }
+
+        let player = self.player_rect();
+
+        if self.golden_target_active {
+            let golden_target = self.golden_target_rect();
+
+            if rects_overlap(&player, &golden_target) {
+                self.score += 3;
+                self.golden_target_active = false;
+                self.increase_enemy_speed();
+                return Some(3);
+            }
+        }
+
+        if rects_overlap(&player, &target) {
+            self.score += 1;
+            self.increase_enemy_speed();
+            self.place_target_random_away_from_enemy();
+            self.try_spawn_golden_target();
+            return Some(1);
+        }
+
+        None
+    }
+
+    pub fn check_player_enemy_collision(&mut self, old_x: f32, old_y: f32) -> Option<i32> {
+        if self.player_hit_cooldown <= 0.0 {
+            let mut hit_by_enemy = false;
+
+            for i in 0..self.enemy_count as usize {
+                let enemy = self.enemy_rect(i);
+                if rects_overlap(&self.player_rect(), &enemy) {
+                    hit_by_enemy = true;
+                    break;
+                }
+            }
+
+            if hit_by_enemy {
+                self.lives = (self.lives - 1).max(0);
+
+                if self.lives == 0 {
+                    self.play_state.game_over();
+                    self.player_visible = false;
+                    self.spawn_explosion();
+                }
+
+                self.player_hit_cooldown = 0.5;
+                self.apply_player_knockback();
+
+                self.resolve_player_knockback_collision(old_x, old_y);
+
+                return Some(-1);
+            }
+        }
+
+        None
     }
 
 }
