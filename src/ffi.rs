@@ -38,12 +38,12 @@ pub extern "C" fn rust_app_on_touch(app: *mut AppState, x: f32, y: f32) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
         let app = unsafe { &mut *app };
 
-        if app.game_over {
+        if app.play_state.is_game_over() {
             return;
         }
 
-        if !app.game_started {
-            app.game_started = true;
+        if app.play_state.is_not_started() {
+            app.play_state.start();
             return;
         }
 
@@ -93,8 +93,8 @@ pub extern "C" fn rust_app_get_scene(app: *const AppState, out_scene: *mut Scene
         out.score = app.score;
         out.level = app.level();
         out.lives = app.lives;
-        out.game_over = if app.game_over { 1 } else { 0 };
-        out.game_started = if app.game_started { 1 } else { 0 };
+        out.game_over = if app.play_state.is_game_over() { 1 } else { 0 };
+        out.game_started = if app.play_state.is_playing() { 1 } else { 0 };
         out.player_is_flashing = if app.player_is_flashing() { 1 } else { 0 };
         out.particles = app.particles;
         out.particle_count = app.particle_count;
