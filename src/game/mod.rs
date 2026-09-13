@@ -125,13 +125,15 @@ impl AppState {
     }
 
     pub fn update(&mut self, dt: f32) -> i32 {
-        // Mettre à jour les particules même en game over
+
+        // Particules (toujours actives)
         self.update_particles(dt);
 
         if !self.play_state.is_playing() {
             return 0;
         }
 
+        // --- Joueur ---
         self.update_player_angle();
         self.update_player_hit_cooldown(dt);
 
@@ -139,15 +141,15 @@ impl AppState {
         let old_player_y = self.player_y;
 
         self.update_player_movement(dt);
-
         self.maybe_spawn_trail_particles(dt);
-
         self.resolve_player_wall_collision(old_player_x, old_player_y);
 
+        // --- Cibles et ennemis ---
         if let Some(score) = self.update_enemies_and_check_target_collisions(dt) {
             return score;
         }
 
+        // --- Collision joueur–ennemi ---
         self.update_enemy_count();
 
         if let Some(result) = self.check_player_enemy_collision(old_player_x, old_player_y) {
