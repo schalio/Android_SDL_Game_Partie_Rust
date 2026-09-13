@@ -14,7 +14,7 @@
 //! - `place_golden_target_random()` / `place_golden_target_random_safely()` : dorée.
 //! - `try_spawn_golden_target()` : tente de faire apparaître la cible dorée.
 
-use crate::collision::rects_overlap;
+use crate::collision::circles_overlap;
 use crate::model::AppState;
 use crate::game::entities;
 
@@ -45,13 +45,23 @@ pub fn place_target_random_away_from_enemy(state: &mut AppState) {
     for _ in 0..16 {
         place_target_random(state);
 
-        let target = entities::target_rect(state);
-        let wall = entities::wall_rect(state);
+        let target = entities::target_circle(state);
+        let wall = entities::wall_circle(state);
 
-        let enemy = entities::enemy_rect(state,0);
+        if circles_overlap(&target, &wall) {
+            continue;
+        }
 
-        if !rects_overlap(&target, &enemy)
-            && !rects_overlap(&target, &wall) {
+        let mut hits_enemy = false;
+        for i in 0..state.enemy_count as usize {
+            let enemy = entities::enemy_circle(state, i);
+            if circles_overlap(&target, &enemy) {
+                hits_enemy = true;
+                break;
+            }
+        }
+
+        if !hits_enemy {
             return;
         }
     }
@@ -71,15 +81,24 @@ pub fn place_golden_target_random_safely(state: &mut AppState) {
     for _ in 0..16 {
         place_golden_target_random(state);
 
-        let golden_target = entities::golden_target_rect(state);
-        let target = entities::target_rect(state);
-        let wall = entities::wall_rect(state);
+        let golden_target = entities::golden_target_circle(state);
+        let target = entities::target_circle(state);
+        let wall = entities::wall_circle(state);
 
-        let enemy = entities::enemy_rect(state,0);
+        if circles_overlap(&golden_target, &target) || circles_overlap(&golden_target, &wall) {
+            continue;
+        }
 
-        if !rects_overlap(&golden_target, &target)
-            && !rects_overlap(&golden_target, &enemy)
-            && !rects_overlap(&golden_target, &wall) {
+        let mut hits_enemy = false;
+        for i in 0..state.enemy_count as usize {
+            let enemy = entities::enemy_circle(state, i);
+            if circles_overlap(&golden_target, &enemy) {
+                hits_enemy = true;
+                break;
+            }
+        }
+
+        if !hits_enemy {
             return;
         }
     }

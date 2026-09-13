@@ -17,10 +17,9 @@
 //! - `update_enemy_count()` : ajuste le nombre d'ennemis selon le niveau.
 //! - `increase_enemy_speed()` : augmente la vitesse de tous les ennemis.
 
-use crate::collision::rects_overlap;
-use crate::model::Rect;
-use crate::model::AppState;
+use crate::collision::{circle_from_rect_f32, circles_overlap};
 use crate::game::entities;
+use crate::model::AppState;
 
 /// Vitesse max en X pour les ennemis
 const MAX_ENEMY_SPEED_X: f32 = 500.0;
@@ -35,7 +34,7 @@ const MIN_ENEMY_SPEED_Y: f32 = 80.0;
 const MIN_ENEMY_SPEED_X: f32 = 80.0;
 
 pub fn update_enemies(state: &mut AppState, dt: f32) {
-    let wall = entities::wall_rect(state);
+    let wall = entities::wall_circle(state);
 
     for i in 0..state.enemy_count as usize {
         // Axe X
@@ -55,9 +54,9 @@ pub fn update_enemies(state: &mut AppState, dt: f32) {
             bounced_on_x = true;
         }
 
-        let enemy_after_x = entities::enemy_rect(state, i);
+        let enemy_after_x = entities::enemy_circle(state, i);
 
-        if rects_overlap(&enemy_after_x, &wall) {
+        if circles_overlap(&enemy_after_x, &wall) {
             state.enemies_x[i] = old_enemy_x;
             state.enemies_vel_x[i] = -state.enemies_vel_x[i];
             bounced_on_x = true;
@@ -89,9 +88,9 @@ pub fn update_enemies(state: &mut AppState, dt: f32) {
             bounced_on_y = true;
         }
 
-        let enemy_after_y = entities::enemy_rect(state, i);
+        let enemy_after_y = entities::enemy_circle(state, i);
 
-        if rects_overlap(&enemy_after_y, &wall) {
+        if circles_overlap(&enemy_after_y, &wall) {
             state.enemies_y[i] = old_enemy_y;
             state.enemies_vel_y[i] = -state.enemies_vel_y[i];
             bounced_on_y = true;
@@ -110,10 +109,10 @@ pub fn update_enemies(state: &mut AppState, dt: f32) {
     // Collision ennemi–ennemi
     for i in 0..state.enemy_count as usize {
         for j in (i + 1)..state.enemy_count as usize {
-            let enemy_i = entities::enemy_rect(state, i);
-            let enemy_j = entities::enemy_rect(state, j);
+            let enemy_i = entities::enemy_circle(state, i);
+            let enemy_j = entities::enemy_circle(state, j);
 
-            if rects_overlap(&enemy_i, &enemy_j) {
+            if circles_overlap(&enemy_i, &enemy_j) {
                 // Inverse les vitesses des deux ennemis
                 let vxi = state.enemies_vel_x[i];
                 let vyi = state.enemies_vel_y[i];
@@ -129,8 +128,8 @@ pub fn update_enemies(state: &mut AppState, dt: f32) {
 }
 
 pub fn place_enemy_random(state: &mut AppState, index: usize) {
-    let wall = entities::wall_rect(state);
-    let player = entities::player_rect(state);
+    let wall = entities::wall_circle(state);
+    let player = entities::player_circle(state);
 
     for _ in 0..32 {
         let max_x = max_enemy_x(state, index) as i32;
@@ -139,16 +138,17 @@ pub fn place_enemy_random(state: &mut AppState, index: usize) {
         let x = state.rand_range(max_x) as f32;
         let y = state.rand_range(max_y) as f32;
 
-        let enemy_rect = Rect {
-            x: x.round() as i32,
-            y: y.round() as i32,
-            w: state.enemies_w[index],
-            h: state.enemies_h[index],
-        };
+        let enemy_circle = circle_from_rect_f32(
+            x,
+            y,
+            state.enemies_w[index],
+            state.enemies_h[index],
+            entities::ENEMY_SHRINK,
+        );
 
         // Vérifie qu'on ne chevauche pas le mur, le joueur, ni l'autre ennemi
-        let mut ok = !rects_overlap(&enemy_rect, &wall)
-            && !rects_overlap(&enemy_rect, &player);
+        let mut ok = !circles_overlap(&enemy_circle, &wall)
+            && !circles_overlap(&enemy_circle, &player);
 
         if ok {
             // Vérifie la collision avec l'autre ennemi
@@ -157,8 +157,8 @@ pub fn place_enemy_random(state: &mut AppState, index: usize) {
                 if j == index {
                     continue;
                 }
-                let other_enemy = entities::enemy_rect(state, j);
-                if rects_overlap(&enemy_rect, &other_enemy) {
+                let other_enemy = entities::enemy_circle(state, j);
+                if circles_overlap(&enemy_circle, &other_enemy) {
                     ok = false;
                     break;
                 }

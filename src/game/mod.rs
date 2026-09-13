@@ -19,7 +19,7 @@
 //! - `state` : état du jeu (PlayState) et calcul du niveau.
 //! - `utils` : utilitaires (RNG).
 
-use crate::collision::rects_overlap;
+use crate::collision::circles_overlap;
 use crate::model::{AppState, Particle, Rect};
 
 pub mod enemy;
@@ -197,6 +197,26 @@ impl AppState {
         entities::wall_rect(self)
     }
 
+    pub fn player_circle(&self) -> crate::collision::Circle {
+        entities::player_circle(self)
+    }
+
+    pub fn target_circle(&self) -> crate::collision::Circle {
+        entities::target_circle(self)
+    }
+
+    pub fn golden_target_circle(&self) -> crate::collision::Circle {
+        entities::golden_target_circle(self)
+    }
+
+    pub fn enemy_circle(&self, index: usize) -> crate::collision::Circle {
+        entities::enemy_circle(self, index)
+    }
+
+    pub fn wall_circle(&self) -> crate::collision::Circle {
+        entities::wall_circle(self)
+    }
+    
     //  particles.rs
 
     pub fn update_particles(&mut self, dt: f32) {
@@ -359,22 +379,22 @@ impl AppState {
     pub fn update_enemies_and_check_target_collisions(&mut self, dt: f32) -> Option<i32> {
         self.update_enemies(dt);
 
-        let target = self.target_rect();
+        let target = self.target_circle();
 
         for i in 0..self.enemy_count as usize {
-            let enemy = self.enemy_rect(i);
-            if rects_overlap(&enemy, &target) {
+            let enemy = self.enemy_circle(i);
+            if circles_overlap(&enemy, &target) {
                 self.place_target_random_away_from_enemy();
                 break;
             }
         }
 
-        let player = self.player_rect();
+        let player = self.player_circle();
 
         if self.golden_target_active {
-            let golden_target = self.golden_target_rect();
+            let golden_target = self.golden_target_circle();
 
-            if rects_overlap(&player, &golden_target) {
+            if circles_overlap(&player, &golden_target) {
                 self.score += 3;
                 self.golden_target_active = false;
                 self.increase_enemy_speed();
@@ -382,7 +402,7 @@ impl AppState {
             }
         }
 
-        if rects_overlap(&player, &target) {
+        if circles_overlap(&player, &target) {
             self.score += 1;
             self.increase_enemy_speed();
             self.place_target_random_away_from_enemy();
@@ -397,9 +417,11 @@ impl AppState {
         if self.player_hit_cooldown <= 0.0 {
             let mut hit_by_enemy = false;
 
+            let player = self.player_circle();
+
             for i in 0..self.enemy_count as usize {
-                let enemy = self.enemy_rect(i);
-                if rects_overlap(&self.player_rect(), &enemy) {
+                let enemy = self.enemy_circle(i);
+                if circles_overlap(&player, &enemy) {
                     hit_by_enemy = true;
                     break;
                 }

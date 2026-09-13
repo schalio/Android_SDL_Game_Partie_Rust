@@ -17,7 +17,7 @@
 //! - `player_is_flashing()` : indique si le joueur est invulnérable.
 
 use crate::model::AppState;
-use crate::collision::rects_overlap;
+use crate::collision::circles_overlap;
 
 pub fn max_player_x(state: &AppState) -> f32 {
     (state.screen_w - state.player_w).max(0) as f32
@@ -156,10 +156,10 @@ pub fn maybe_spawn_trail_particles(state: &mut AppState, _dt: f32) {
 
 /// Résout la collision du joueur avec le mur en revenant à sa position précédente.
 pub fn resolve_player_wall_collision(state: &mut AppState, old_x: f32, old_y: f32) {
-    let wall = state.wall_rect();
-    let player = state.player_rect();
+    let wall = crate::game::entities::wall_circle(state);
+    let player = crate::game::entities::player_circle(state);
 
-    if rects_overlap(&player, &wall) {
+    if circles_overlap(&player, &wall) {
         state.player_x = old_x;
         state.player_y = old_y;
         state.has_move_target = false;
@@ -170,10 +170,10 @@ pub fn resolve_player_wall_collision(state: &mut AppState, old_x: f32, old_y: f3
 
 /// Après un knockback, remet le joueur à sa position précédente s'il est dans le mur.
 pub fn resolve_player_knockback_collision(state: &mut AppState, old_x: f32, old_y: f32) {
-    let player_after_knockback = state.player_rect();
-    let wall = state.wall_rect();
+    let player_after_knockback = crate::game::entities::player_circle(state);
+    let wall = crate::game::entities::wall_circle(state);
 
-    if rects_overlap(&player_after_knockback, &wall) {
+    if circles_overlap(&player_after_knockback, &wall) {
         state.player_x = old_x;
         state.player_y = old_y;
         state.clamp_player_position();
